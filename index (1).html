@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<!--
+  ============================================================================
+  BusTrack — 即時公車追蹤系統 / Real-Time Bus Tracking System
+  ============================================================================
+  技術 / Stack : HTML + Tailwind CSS (CDN) + JavaScript + Leaflet 地圖
+  說明 / About : 這是一個「發表會等級」的成果作品。整份程式碼都有中英對照註解，
+                 方便老師上課時逐段講解「這裡在做什麼、為什麼這樣做」。
+                 This is a showcase-quality project. Every part is commented in
+                 Chinese + English so an instructor can explain it line by line.
+  ============================================================================
+-->
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <!--
+    viewport(視口)設定 / Viewport meta:
+    告訴手機瀏覽器「畫面寬度 = 裝置寬度」，網頁才會正確縮放（RWD 響應式的基礎）。
+    Tells mobile browsers to use the device width, so the page scales correctly.
+  -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BusTrack — Real-Time Bus Tracking</title>
+
+  <!-- Leaflet 地圖樣式 / Leaflet map stylesheet（一定要在自己的樣式之前載入） -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <!-- 字型 / Web font：Inter 是乾淨現代的介面字型 -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" />
+
+  <!--
+    Tailwind CSS（CDN 版）/ Tailwind via CDN:
+    載入後就能直接在 HTML 用 class（例如 class="flex h-screen"）來排版，
+    不必另外寫一堆 CSS。CDN 版適合教學與展示，正式上線可改用編譯版。
+    Load Tailwind so we can style with utility classes directly in the HTML.
+  -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- 自訂 Tailwind 設定（外部檔）/ custom Tailwind config (external) -->
+  <script src="tailwind.config.js"></script>
+
+  <!-- 自訂樣式（外部檔）/ custom styles (external) -->
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<!--
+  body：font-sans 套用 Inter；bg-canvas 設定頁面底色；text-ink 設定文字色。
+  body uses Tailwind utilities for font, background and text color.
+-->
+<body class="font-sans bg-canvas text-ink antialiased">
+
+  <!--
+    .app 是最外層容器 / Root container:
+    flex → 讓「側欄」和「地圖」左右並排；h-screen → 高度滿版一個螢幕；
+    overflow-hidden → 避免整頁出現卷軸（卷軸交給內部區塊自己處理）。
+    flex places sidebar + map side by side; h-screen = full viewport height.
+  -->
+  <div class="app relative flex h-screen overflow-hidden">
+
+    <!-- ====================================================================
+         側欄 SIDEBAR
+         桌機固定在左邊（寬 380px）；手機改成可滑出的抽屜（見下方 class）。
+         Desktop: fixed 380px panel. Mobile: slide-in drawer.
+         ==================================================================== -->
+    <aside id="sidebar"
+      class="sidebar absolute lg:static z-[1000] flex h-full w-full sm:w-[380px] lg:w-[380px] shrink-0 flex-col
+             bg-white shadow-soft -translate-x-full lg:translate-x-0
+             transition-transform duration-300 ease-out">
+
+      <!-- 側欄頂部：Logo + 搜尋 / Sidebar header: logo + search -->
+      <div class="px-5 pt-5">
+        <div class="mb-4 flex items-center justify-between">
+          <div class="flex items-center gap-2.5">
+            <!-- Logo 圖示方塊 / Logo tile -->
+            <div class="flex h-9 w-9 items-center justify-center rounded-[10px] bg-navy text-white">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/><circle cx="7" cy="17" r="1"/><circle cx="17" cy="17" r="1"/></svg>
+            </div>
+            <span class="text-xl font-bold text-navy">Bus<span class="text-brand-red">Track</span></span>
+          </div>
+          <!-- 關閉鈕（手機抽屜用）/ Close button for mobile drawer -->
+          <button id="closeSb" aria-label="Close"
+            class="flex items-center justify-center rounded-lg p-2 text-muted hover:bg-canvas">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+
+        <!--
+          搜尋框 / Search box:
+          focus-within:ring → 當裡面的 input 被點選時，外框會變色（提升質感）。
+          oninput="onSearch()" → 每打一個字就觸發 JS 重新篩選站牌。
+        -->
+        <div class="mb-3.5 flex items-center gap-2 rounded-[10px] border-[1.5px] border-line bg-canvas px-3.5 py-2.5
+                    transition focus-within:border-brand-blue focus-within:ring-2 focus-within:ring-brand-blue/20">
+          <svg class="shrink-0 text-muted" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <input id="sbSearch" type="text" oninput="onSearch(this.value)"
+            placeholder="Search by stop number or name…"
+            class="flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-muted" />
+        </div>
+      </div>
+
+      <!--
+        分頁列 TABS / Tab bar:
+        4 個分頁：附近、站牌、路線、收藏。用 data-tab 標記身分，JS 靠它判斷要顯示哪一頁。
+        Four tabs (Nearby / Stops / Routes / Favorites). data-tab tells JS which view.
+      -->
+      <div class="flex border-b-[1.5px] border-line px-5">
+        <button class="tab-btn group flex flex-1 flex-col items-center gap-1 border-b-2 border-navy py-2.5 text-[11px] font-medium text-navy" data-tab="nearby">
+          <svg class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+          Nearby
+        </button>
+        <button class="tab-btn flex flex-1 flex-col items-center gap-1 border-b-2 border-transparent py-2.5 text-[11px] font-medium text-muted" data-tab="stops">
+          <svg class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><circle cx="7" cy="17" r="1"/><circle cx="17" cy="17" r="1"/></svg>
+          Stops
+        </button>
+        <button class="tab-btn flex flex-1 flex-col items-center gap-1 border-b-2 border-transparent py-2.5 text-[11px] font-medium text-muted" data-tab="routes">
+          <svg class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17h2a2 2 0 0 0 0-4H5l-2-6h14l1 3"/><path d="M14 17h6"/><circle cx="7.5" cy="17" r="1.5"/><circle cx="17.5" cy="17" r="1.5"/></svg>
+          Routes
+        </button>
+        <button class="tab-btn flex flex-1 flex-col items-center gap-1 border-b-2 border-transparent py-2.5 text-[11px] font-medium text-muted" data-tab="favorites">
+          <svg class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          Saved
+        </button>
+      </div>
+
+      <!--
+        側欄內容區 / Sidebar body:
+        flex-1 → 把剩下的高度全吃掉；overflow-y-auto → 內容太多時可自己卷動。
+        裡面的 HTML 由 JS 的 render() 動態填入（這就是「資料驅動畫面」）。
+        Content is injected by JS render(); this is data-driven rendering.
+      -->
+      <div id="sbBody" class="scroll-thin flex-1 overflow-y-auto px-5 py-4"></div>
+    </aside>
+
+    <!-- 半透明遮罩 / Dark overlay：手機抽屜打開時蓋住地圖，點它可關閉抽屜 -->
+    <div id="overlay" class="absolute inset-0 z-[900] hidden bg-black/30"></div>
+
+    <!-- ====================================================================
+         地圖區 MAP AREA
+         flex-1 → 佔滿側欄以外的所有空間；relative → 讓裡面的按鈕用絕對定位浮在地圖上。
+         ==================================================================== -->
+    <div class="relative flex-1">
+
+      <!-- 手機/平板：漂浮在地圖上的整合式搜尋列 / Floating top bar (mobile + tablet)
+           桌機隱藏（lg:hidden）；窄螢幕(<1024px)時自動出現。
+           樣式參考：一顆白色圓角藥丸，漢堡在左、搜尋在中、放大鏡在右，浮在地圖上方。
+           Hidden on desktop; appears below 1024px. A floating white pill:
+           hamburger (left) + search (center) + magnifier (right). -->
+      <div class="absolute inset-x-0 top-0 z-[400] p-3 lg:hidden">
+        <div class="flex items-center gap-2 rounded-full bg-white px-2.5 py-2 shadow-[0_4px_18px_rgba(26,35,64,.16)]">
+          <!-- 漢堡選單：點了打開左側抽屜 / Hamburger: opens the sidebar drawer -->
+          <button id="openSb" aria-label="Menu" class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-ink hover:bg-canvas">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="18" y2="18"/></svg>
+          </button>
+          <!-- 中間的搜尋輸入框（與側欄搜尋連動）/ Center search input (synced with sidebar) -->
+          <input id="topSearch" type="text" oninput="onSearch(this.value)" placeholder="Search by stop number"
+            class="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-muted" />
+          <!-- 右側放大鏡 / Magnifier on the right -->
+          <span class="flex h-8 w-8 shrink-0 items-center justify-center text-muted">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          </span>
+        </div>
+      </div>
+
+      <!-- Leaflet 會把地圖畫進這個 div / Leaflet renders the map into this div -->
+      <div id="map" class="h-full w-full"></div>
+
+      <!-- 地圖控制鈕（定位、放大、縮小）/ Map controls: locate, zoom in/out -->
+      <div class="absolute right-4 top-4 z-[400] flex flex-col gap-2 lg:top-4 max-lg:top-[64px]">
+        <button id="locBtn" title="My location" class="flex h-10 w-10 items-center justify-center rounded-[10px] bg-white text-ink shadow-soft hover:bg-canvas">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/></svg>
+        </button>
+        <button id="zinBtn" title="Zoom in" class="flex h-10 w-10 items-center justify-center rounded-[10px] bg-white text-ink shadow-soft hover:bg-canvas">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
+        <button id="zoutBtn" title="Zoom out" class="flex h-10 w-10 items-center justify-center rounded-[10px] bg-white text-ink shadow-soft hover:bg-canvas">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
+      </div>
+
+      <!-- 「即時追蹤」徽章 / Live badge -->
+      <div class="absolute left-4 z-[400] flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-semibold shadow-soft bottom-5 lg:bottom-5 max-sm:bottom-[96px] max-sm:left-1/2 max-sm:-translate-x-1/2">
+        <span class="live-dot h-2 w-2 rounded-full bg-brand-green"></span> Live Tracking
+      </div>
+
+      <!-- ==================================================================
+           底部抽屜 BOTTOM SHEET（只在手機顯示 / mobile only）
+           桌機看側欄；手機螢幕小，改成從下方拉起的抽屜，這是常見的手機 UI 模式。
+           On phones the sidebar content lives in a pull-up sheet instead.
+           ================================================================== -->
+      <div id="bsheet" class="bsheet absolute inset-x-0 bottom-0 z-[400] hidden max-h-[66vh] overflow-y-auto rounded-t-[20px] bg-white shadow-[0_-4px_24px_rgba(0,0,0,.12)] max-sm:block">
+        <div id="bsHandle" class="mx-auto mt-2.5 h-1 w-9 cursor-pointer rounded-full bg-line"></div>
+        <!-- 抽屜內的分頁列 / Sheet tab bar -->
+        <div class="flex justify-around border-b border-line py-2.5">
+          <button class="bn-btn flex flex-col items-center gap-1 px-3 text-[10px] font-medium text-navy" data-tab="nearby"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>Nearby</button>
+          <button class="bn-btn flex flex-col items-center gap-1 px-3 text-[10px] font-medium text-muted" data-tab="stops"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><circle cx="7" cy="17" r="1"/><circle cx="17" cy="17" r="1"/></svg>Stops</button>
+          <button class="bn-btn flex flex-col items-center gap-1 px-3 text-[10px] font-medium text-muted" data-tab="routes"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17h2a2 2 0 0 0 0-4H5l-2-6h14l1 3"/><path d="M14 17h6"/><circle cx="7.5" cy="17" r="1.5"/><circle cx="17.5" cy="17" r="1.5"/></svg>Routes</button>
+          <button class="bn-btn flex flex-col items-center gap-1 px-3 text-[10px] font-medium text-muted" data-tab="favorites"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>Saved</button>
+        </div>
+        <!-- 抽屜內容（和側欄共用同一份 HTML）/ Sheet body (shares the same HTML as sidebar) -->
+        <div id="bsBody" class="px-4 pb-6 pt-3"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 先載入 Leaflet 函式庫，再載入我們的程式 / Load Leaflet first, then our app -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="app_lesson1.js"></script>
+</body>
+</html>

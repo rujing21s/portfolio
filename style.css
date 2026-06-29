@@ -1,171 +1,79 @@
 
-:root {
-    --primary: #5b8def;
-    --primary-dark: #3b6ed4;
-    --accent: #f59e42;
-    --bg: #f5f7fb;
-    --text: #1f2937;
-    --muted: #64748b;
+/* ============================================================================
+   BusTrack — style.css（自訂樣式 / custom styles）
+   ----------------------------------------------------------------------------
+   這裡只放「Tailwind class 不好直接表達」的東西：
+     1) #map 的堆疊層級修正（關鍵！）
+     2) Leaflet 地圖內部元素外觀（popup、marker）
+     3) 自訂動畫（脈動光點、公車方向箭頭）
+     4) 卷軸、底部抽屜動畫
+   These are things hard to express with Tailwind utility classes.
+   ============================================================================ */
+
+/* ── 關鍵修正 / The key fix ──────────────────────────────────────────────────
+   問題：Leaflet 會在地圖內建立很多圖層(pane)，z-index 最高到約 700，
+        導致漢堡選單、搜尋列(z-400)被地圖蓋住、點不到。
+   解法：給 #map 一個 z-index:0，讓它成為「獨立堆疊層」，
+        地圖內部所有東西都被關在這個 0 的層裡，外面任何元素都會浮在上面。
+   Problem: Leaflet's internal panes go up to z-index ~700 and cover our UI.
+   Fix: make #map its own stacking context (z-index:0) so its panes stay inside
+        it; any sibling with z-index >= 1 then sits on top. */
+#map { position: relative; z-index: 0; }
+
+/* 讓地圖也用 Inter 字型 / Make Leaflet use the same font */
+.leaflet-container { font-family: 'Inter', sans-serif; }
+
+/* Leaflet 彈出視窗外觀 / Popup look */
+.leaflet-popup-content-wrapper { border-radius: 14px; box-shadow: 0 2px 16px rgba(26,35,64,.18); }
+.leaflet-popup-content { margin: 12px 14px; min-width: 180px; }
+
+/* 使用者位置：兩層脈動光圈 / User location: pulsing rings */
+.upulse-ring { width:74px; height:74px; border-radius:50%;
+  background:rgba(77,171,247,.16); border:2px solid rgba(77,171,247,.35);
+  display:flex; align-items:center; justify-content:center; }
+.upulse-dot { width:14px; height:14px; background:#4dabf7; border-radius:50%;
+  border:3px solid #fff; box-shadow:0 0 0 0 rgba(77,171,247,.6); animation:upl 2s infinite; }
+@keyframes upl { 0%{box-shadow:0 0 0 0 rgba(77,171,247,.6)}
+  70%{box-shadow:0 0 0 12px rgba(77,171,247,0)} 100%{box-shadow:0 0 0 0 rgba(77,171,247,0)} }
+
+/* 「Live」綠點呼吸效果 / Breathing live dot */
+.live-dot { animation: pgr 1.5s infinite; }
+@keyframes pgr { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.55;transform:scale(1.35)} }
+
+/* ── 公車標記 / Bus marker ───────────────────────────────────────────────────
+   水滴徽章 + 中間白色公車圖示 + 下方依行進方向旋轉的小箭頭 + 外圈脈動環。
+   A teardrop badge with a white bus glyph, a rotating direction arrow,
+   and a pulsing ring. */
+.bus-pin { position: relative; width: 38px; height: 38px; }
+.bus-pin .badge {
+  position:absolute; inset:0; border-radius:50% 50% 50% 0;
+  transform: rotate(-45deg);
+  box-shadow: 0 4px 10px rgba(0,0,0,.30); border:2.5px solid #fff;
+  display:flex; align-items:center; justify-content:center;
 }
-
-* { box-sizing: border-box; margin: 0; padding: 0; }
-
-body {
-    font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    line-height: 1.6;
+.bus-pin .badge svg { transform: rotate(45deg); }   /* 把圖示轉正 / un-rotate the glyph */
+.bus-pin .arrow {
+  position:absolute; left:50%; top:50%; width:0; height:0;
+  border-left:5px solid transparent; border-right:5px solid transparent;
+  border-bottom:8px solid #1a2340;
+  transform-origin: center -14px;   /* 以標記中心為圓心旋轉 / rotate around pin center */
+  margin-left:-5px; margin-top:-2px;
 }
-
-a { color: var(--primary); }
-
-header {
-    background: white;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+.bus-pin .ring {
+  position:absolute; inset:-6px; border-radius:50%;
+  border:2px solid rgba(255,255,255,.0); animation: busring 2.2s infinite;
 }
+@keyframes busring { 0%{box-shadow:0 0 0 0 rgba(0,0,0,.12)} 70%{box-shadow:0 0 0 8px rgba(0,0,0,0)} 100%{box-shadow:0 0 0 0 rgba(0,0,0,0)} }
 
-.nav {
-    max-width: 1100px;
-    margin: 0 auto;
-    padding: 1rem 2rem;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
+/* 公車站標記 / Bus-stop marker（小圓點） */
+.stop-pin { width:26px; height:26px; border-radius:50%; border:2.5px solid #fff;
+  display:flex; align-items:center; justify-content:center; color:#fff;
+  box-shadow:0 2px 6px rgba(0,0,0,.22); }
 
-.brand {
-    font-weight: bold;
-    font-size: 1.4rem;
-    color: var(--primary);
-    text-decoration: none;
-}
+/* 自訂卷軸 / Thin scrollbar */
+.scroll-thin::-webkit-scrollbar { width:5px; }
+.scroll-thin::-webkit-scrollbar-thumb { background:#e5e7eb; border-radius:4px; }
 
-.links {
-    display: flex;
-    gap: 1.5rem;
-}
-
-.links a {
-    color: var(--text);
-    text-decoration: none;
-    transition: color 0.2s;
-}
-
-.links a:hover, .links a.active {
-    color: var(--primary);
-}
-
-main {
-    max-width: 1100px;
-    margin: 0 auto;
-    padding: 2rem;
-}
-
-main h1 {
-    margin-bottom: 1rem;
-}
-
-main h2 {
-    margin: 1.5rem 0 1rem;
-    color: var(--primary-dark);
-}
-
-.hero {
-    text-align: center;
-    padding: 4rem 1rem;
-    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-    color: white;
-    border-radius: 16px;
-    margin-bottom: 2rem;
-}
-
-.hero h1 { font-size: 2.5rem; margin-bottom: 0.5rem; }
-
-.hero .cta {
-    display: inline-block;
-    margin-top: 1rem;
-    padding: 0.6rem 1.5rem;
-    background: white;
-    color: var(--primary);
-    border-radius: 999px;
-    text-decoration: none;
-    font-weight: bold;
-}
-
-.highlights {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 1rem;
-}
-
-.card {
-    background: white;
-    padding: 1.5rem;
-    border-radius: 12px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-    text-align: center;
-}
-
-.card h3 { color: var(--primary); }
-
-.grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 1.5rem;
-}
-
-.work {
-    background: white;
-    padding: 1.5rem;
-    border-radius: 12px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-}
-
-.work h3 { color: var(--primary-dark); margin-bottom: 0.5rem; }
-
-.skills .skill {
-    margin-bottom: 0.75rem;
-}
-
-.bar {
-    background: #e5e7eb;
-    height: 8px;
-    border-radius: 4px;
-    margin-top: 4px;
-    overflow: hidden;
-}
-
-.bar div {
-    background: var(--accent);
-    height: 100%;
-}
-
-.contact-form input, .contact-form textarea {
-    width: 100%;
-    max-width: 500px;
-    padding: 0.5rem;
-    margin-top: 4px;
-    border: 1px solid #e5e7eb;
-    border-radius: 6px;
-}
-
-.contact-form button {
-    padding: 0.6rem 1.5rem;
-    background: var(--primary);
-    color: white;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-}
-
-footer {
-    text-align: center;
-    padding: 2rem;
-    color: var(--muted);
-    font-size: 0.9rem;
-}
-
-@media (max-width: 600px) {
-    .nav { flex-direction: column; gap: 0.5rem; }
-    .highlights, .grid { grid-template-columns: 1fr; }
-}
+/* 底部抽屜滑動動畫 / Bottom-sheet slide transition（手機版用） */
+.bsheet { transform: translateY(calc(100% - 84px)); transition: transform .32s cubic-bezier(.16,1,.3,1); }
+.bsheet.exp { transform: translateY(0); }
